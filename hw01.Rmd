@@ -1,0 +1,189 @@
+---
+title: |
+  | \vspace{-1.8cm}**DS 223: Marketing Analytics**  
+  | Homework 1 - Bass Model
+author: "Alexander Shahramanyan"
+date: "February 26, 2024"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, echo = TRUE, dev='pdf')
+```
+
+## Choosing An Innovation
+
+The innovation chosen is [Samba Robotic Toothbrush](https://curaprox.us/info/samba) designed and produced by CURAPROX.
+
+> "The Samba Robotic Toothbrush allows you to brush your teeth without moving your hand. Designed to make oral care more accessible, especially for people with limited mobility or dexterity. Samba employs a revolutionary new brushing movement that combines both low and high frequency oscillations, driving 12,900 bristles along every contour of your teeth."
+> Available only in the U.S.
+> `r tufte::quote_footer('- CURAPROX')`
+
+To summarize, this is a new electric toothbrush designed especially for senior citizens and people with disabilities.
+
+
+```{r echo=F}
+# Load the libraries
+library(diffusion)
+library(ggplot2)
+library(reshape2)
+library(ggpubr)
+```
+
+## Similar Innovation
+
+A similar innovation from the past is the electric toothbrush. Introduced in the 1950s, it revolutionized oral hygiene by automating brushing motions and providing a more thorough clean compared to manual brushing. Its introduction marked a significant advancement in oral care, particularly benefiting individuals with limited dexterity or mobility.
+
+Both innovations are similar since both aim to make oral care more accessible and efficient for users (especially those with limited dexterity, such as senior citizens or people with disabilities), emphasizing ease of use and comprehensive cleaning. These similarities underscore their common purpose as tools for oral hygiene.
+
+Moreover, another similarity is that both the electric toothbrush and the Samba Robotic Toothbrush are electric devices designed to alleviate the physical demands of traditional brushing methods. Hence, they belong to the same category of products.
+
+## Data Exploration
+
+The data, titled U.S. population: Most used types of power toothbrushes from 2012 to 2020,  is obtained from [Statista](https://www.statista.com/statistics/287370/types-of-power-toothbruses-in-the-us-trend/). It includes information on how many people reported using electric or battery-powered toothbrush from 2012 to 2020. While this is not sales data, it still can be used for estimation. Let's plot the data to have an understanding of what we're dealing with.
+
+```{r, echo=F, fig.height=4, fig.width=9}
+# Read the CSV file
+data <- read.csv("electric_toothbrush.csv")
+
+# Reshape the data from wide to long format
+data_long <- melt(data, id.vars = "Year")
+
+# Create a bar chart of the toothbrushes per category
+ggplot(data_long, aes(x = Year, y = value, fill = variable)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    labs(title = "Number of People Using Electric Toothbrushes in the USA",
+         x = "Year",
+         y = "People, in mln",
+         fill = "Type") +
+    scale_x_continuous(breaks = seq(2012, 2020, by = 1)) +
+    theme_minimal() +
+    theme(legend.position = "top")
+```
+
+
+Now, since both categories represent electric toothbrushes, let's add them up and plot a line chart of it.
+
+
+
+```{r, echo=F, fig.height=4, fig.width=9}
+# Compute the total number of electric toothbrushes
+data$Total <- data$Electric.rechargeable + data$Battery.operated
+
+# Line chart of the total toothbrushes
+ggplot(data) +
+    geom_line(aes(x = Year, y = Total), linewidth=1) +
+    ylim(0,120) +
+    labs(title = "Number of People Using Electric Toothbrushes in the USA",
+         x = "Year",
+         y = "People, in mln") +
+    scale_x_continuous(breaks = seq(2012, 2020, by = 1)) +
+    theme_minimal()
+```
+
+
+Just from this sales graph, we can see that for the specified period, the innovation rate is quite large, because the initial sales are quite high. Now, this might be caused by the fact that we don't have full data since the introduction of electric toothbrushes. Anyway, as we already have the data, we can proceed to estimate the Bass model parameters ($p$, $q$, and $m$) for the electric toothbrushes.
+
+
+```{r, echo=F, fig.height=4, fig.width=9}
+# Get the data
+sales <- data$Total
+t = 1:length(sales)
+
+# Define the function to minimize (residuals function)
+residuals_function <- function(params) {
+    m <- params[1]
+    p <- params[2]
+    q <- params[3]
+    
+    predicted <- m * (((p + q)^2/p) * exp(-(p + q) * t)) / (1 + (q/p) * exp(-(p + q) * t))^2
+    sum((sales - predicted)^2)
+}
+
+# Initial parameter values
+initial_params <- c(sum(sales), 0.02, 0.4)
+
+# Use optim with Nelder-Mead method
+optim_result <- optim(par = initial_params, fn = residuals_function, method = "BFGS")
+
+# Extract optimized parameters
+optimized_params <- optim_result$par
+
+m <- optimized_params[1]
+print(m)
+p <- optimized_params[2]
+print(p)
+q <- optimized_params[3]
+print(q)
+```
+
+To estimate the market potential of this new product, we ideally need to find the number of people with limited dexterity and the number of senior citizens in the USA. Since that data is not available, we'll estimate this by the number of US citizens with disabilities. This is only a rough estimation, since the price is somewhat high (~ 300$) compared to its alternatives (manual or electric toothbrushes), people from outside the mentioned categories can also become a part of this market. According to [Pew Research Center](https://www.pewresearch.org/short-reads/2023/07/24/8-facts-about-americans-with-disabilities/), about 13 percent of Americans have some kind of disability. Additionally, let's assume about 70% of this population can afford to buy the innovation. We'll use these figures to estimate the market potential. However, let's first plot for the older innovation, electric toothbrushes.
+
+```{r, echo=F, fig.height=4, fig.width=9}
+# f(t)
+bass.f <- function(t, p, q) {
+    ((p + q)^2 / p) * exp(-(p + q) * t) / (1 + (q / p) * exp(-(p + q) * t))^2
+}
+
+# Make predictions for the new innovation
+data$Pred = bass.f(1:nrow(data), p = p, q = q)*m
+ggplot(data, aes(x = Year, y = Total)) +
+    geom_bar(stat = 'identity') +
+    geom_point(mapping = aes(x=Year, y=Pred), color = 'red') +
+    labs(title = "Predicted Sales",
+         x = "Year",
+         y = "Sales, in mln") +
+    scale_x_continuous(breaks = seq(2012, 2020, by = 1)) +
+    theme_minimal()
+```
+
+Now, let's use the estimated market potential and plot the predicted sales for the new innovation.
+
+```{r, echo=F, fig.height=4, fig.width=9}
+# Estimated market potential
+percentage_disabled = 0.13
+percentage_can_afford = 0.70
+m_est = m * percentage_disabled * percentage_can_afford
+
+# Make predictions for the new innovation
+data$Pred = bass.f(1:nrow(data), p = p, q = q)*m_est
+ggplot(data, mapping = aes(x=Year, y=Pred)) +
+    ylim(0,15) +
+    geom_point(color = 'red') +
+    geom_line() +
+    labs(title = "Predicted Sales (new innovation)",
+         x = "Year",
+         y = "Sales, in mln") +
+    scale_x_continuous(breaks = seq(2012, 2020, by = 1)) +
+    theme_minimal()
+```
+
+As we can see, the predicted sales data is consistent and almost linear. This indicates good and stable sales for the new invention. However, the new innovation is somewhat pricier and the similarity of the two innovations can be questionable (even though electric toothbrushes are the closest to this new innovation one can find). Now, we can plot the `f(t)` and `F(t)`, that is the proportion of adopters at/until certain time for the estimated innovation and imitation rates.
+
+```{r, echo=F, fig.height=4, fig.width=9}
+ft <- ggplot(data.frame(t = 1:30), aes(t)) +
+    stat_function(fun = bass.f, args = c(p=p, q=q), linewidth=1) +
+    labs(title = 'f(t)') +
+    theme_minimal()
+
+# F(t)
+bass.F <- function(t,p,q){
+    (1-exp(-(p+q)*t))/
+        (1+(q/p)*exp(-(p+q)*t))
+}
+
+Ft <- ggplot(data.frame(t = 1:100), aes(t)) +
+    stat_function(fun=bass.F,args=c(p=p,q=q), linewidth=1) +
+    labs(title = "F(t)") +
+    scale_x_continuous(breaks = seq(2012, 2020, by = 1)) +
+    theme_minimal()
+
+ggarrange(ft, Ft)
+```
+
+The following plots shows how the market adopts the new innovation. As we can see, the adoption is relatively fast.
+
+
